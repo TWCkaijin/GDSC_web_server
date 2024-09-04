@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-tw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>伺服器設定</title>
+</head>
+<body>
+    <h1>課程設定</h1>
+    <form id="setcourseForm">
+        <label for="course">課程名稱:</label>
+        <input type="text" id="course" name="course" required>
+        <br/>
+        <label for="course">簽到密鑰:</label>
+        <input type="text" id="code" name="course" required>
+        <br/>
+        <button type="submit">設定課程</button>
+    </form>
+    <div id="settingsResult"></div>
+
+    <h1>手動簽到</h1>
+    <form id="checkinForm">
+        <label for="id">ID:</label>
+        <input type="text" id="id" name="id" required>
+        <button type="submit">簽到</button>
+    </form>
+    <div id="checkinResult"></div>
+
+    <script>
+        let code;
+        document.getElementById('setcourseForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const course = document.getElementById('course').value;
+            code = document.getElementById('code').value;
+            localStorage.setItem('code', code);
+            fetch(`/checkin/settings?course=${course}&code=${code}`)
+                .then(response => response.text())
+                .then(data => {
+                    const settingsResult = document.getElementById('settingsResult');
+                    settingsResult.innerText = data;
+                    setTimeout(() => {
+                        settingsResult.innerText = '';
+                    }, 3000); // 3秒後清除結果
+                    document.getElementById('settingsForm').reset();
+                })
+                .catch(error => {
+                    document.getElementById('settingsResult').innerText = '設定失敗';
+                    document.getElementById('settingsForm').reset();
+                });
+        });
+
+        document.getElementById('checkinForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const id = document.getElementById('id').value;
+            const password = localStorage.getItem('code');
+            console.log(password);
+            fetch(`/checkin?id=${id}&code=${password}`)
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('checkinResult').innerText = data;
+                    document.getElementById('settingsForm').reset();
+                })
+                .catch(error => {
+                    document.getElementById('checkinResult').innerText = '簽到失敗';
+                    document.getElementById('settingsForm').reset();
+                });
+        });
+    </script>
+</body>
+</html>
