@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const admin = require('./firebase.js');
+const admin = require('./firebase_admin.js');
 const axios = require('axios');
 const path = require('path');
 const app = express();
@@ -53,7 +53,7 @@ app.get('/checkin/settings', (req, res) => {
 });
 
 
-app.post('/api/createuser',(req, res) => {
+app.post('/api/createuser',async (req, res) => {
   console.log("Creating user...");
   try{
     const {userData, webSecret} = req.body;
@@ -87,7 +87,7 @@ app.post('/api/createuser',(req, res) => {
       ],
     }
 
-    userRef.set({
+    await userRef.set({
       DisplayName: userData.displayName,
       Email: userData.email,
       Avatar: userData.avatar,
@@ -162,11 +162,11 @@ app.get('/auth/discord/callback', async (req, res) => {
   const linkDiscordAccount = async (firebaseUid, discordInfo) => {
     const userRef = db.collection('UserProfile').doc(firebaseUid);
     await userRef.set({
-      discord: {
-        id: discordInfo.id,
-        username: discordInfo.username,
-        discriminator: discordInfo.discriminator,
-        avatar: discordInfo.avatar,
+      Discord: {
+        UserId: discordInfo.id,
+        UserName: discordInfo.username,
+        Discriminator: discordInfo.discriminator,
+        Avatar: discordInfo.avatar,
       },
     }, { merge: true });
   };
