@@ -5,10 +5,16 @@ const admin = require('./firebase_admin.js');
 const axios = require('axios');
 const path = require('path');
 const app = express();
+const functions = require('firebase-functions');
+
+
+
+const WEB_SECRET = functions.config().web.web_secret ;
+const DISCORD_CLIENT_ID = functions.config().web.discord_client_id;
+const DISCORD_SECRET = functions.config().web.discord_secret ;
+const DISCORD_REDIRECT_URI = functions.config().web.discord_redirect_uri ;
 
 const db = admin.firestore();
-
-const port = 5050;
 
 let current_course = "example_course";
 let current_password = "1234";
@@ -18,54 +24,64 @@ let current_password = "1234";
 
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000','https://gdsc-web-2d5fa.firebaseapp.com','https://gdsc-web-2d5fa.web.app'],
   methods: 'GET, POST, PUT, DELETE',
   credentials: true, // If you're using cookies or HTTP authentication
 }));
-app.options('/api/createuser', cors());
+app.options('*', cors());
 
-app.use('/settings/home',express.static(path.join(__dirname, 'public/home')));
-app.use('/settings/course',express.static(path.join(__dirname, 'public/course')));
-app.use('/settings/project',express.static(path.join(__dirname, 'public/project')));
+app.use('/settings/home',express.static(path.join(__dirname, './pages/home')));
+app.use('/settings/course',express.static(path.join(__dirname, './pages/course')));
+app.use('/settings/project',express.static(path.join(__dirname, './pages/project')));
 
 // 設置根路由
 app.get('/', (req, res) => {
   res.send('Hello, World!');
-
+  console.log("Root has been visited");
 });
 
-app.get('/checkin', (req, res) => {
-    const id=req.query.id;
+app.post('/checkin', async(req, res) => {
+    const userId=req.query.user;
+    const courseId = req.query.course;
     const code=req.query.code;
     if (code==current_password) {
-        console.log(`簽到成功: ID=${id}`);
-        res.send(`簽到成功: ID=${id}`);
+        await admin.firestore().collection("attendence_sheet").doc(courseId).update({
+            ['checkin']: admin.firestore.FieldValue.arrayUnion(userId),
+        });
+
+        await admin.firestore().collection("UserProfile").doc(userId).update({
+            ['CourseStatus.Attendence']: admin.firestore.FieldValue.increment(1),
+        });
+        res.status(200).send(`使用者 ${userId} 簽到成功`);
     } else {
         res.status(400).send(`缺少 id 或 secretcode 參數`);
     }
 });
 
-app.get('/checkin/settings', (req, res) => {
+app.post('/checkin/settings', (req, res) => {
     current_course=req.query.course;
     current_password=req.query.code;
-    console.log(`設定成功: course=${course}`);
-    res.send(`設定成功: course=${course}`);
+    console.log(`設定成功: course=${current_course}`);
+    res.send(`ID:${current_course}課程及密鑰設定成功`);
 });
 
 
-app.post('/api/createuser',async (req, res) => {
+app.post('/createuser',async (req, res) => {
   console.log("Creating user...");
   try{
-    const {userData, webSecret} = req.body;
-    if (webSecret !== process.env.WEB_SECRET) {
+    const userData = req.body.userData;
+    const clientWebSecret = req.body.webSecret;
+    if (clientWebSecret !== WEB_SECRET) {
+      console.log("Unauthorized terminal");
+      console.log("Client secret:"+clientWebSecret+" \nServer secret:"+WEB_SECRET);
+      console.log(req.body);
       return res.status(401).send('Unauthorized terminal');
     }
     if (!userData || !userData.uid || !userData.email || !userData.displayName) {
+      console.log("Invalid user data");
       return res.status(400).json({ error: "Invalid user data" });
     }
 
-
-    const userRef = db.collection("UserProfile").doc(userData.uid);
 
     const MEMBER_COURSE_STATUS = {
       Attendence:0,
@@ -87,7 +103,7 @@ app.post('/api/createuser',async (req, res) => {
       ],
     }
 
-    await userRef.set({
+    await admin.firestore().collection("UserProfile").doc(userData.uid).set({
       DisplayName: userData.displayName,
       Email: userData.email,
       Avatar: userData.avatar,
@@ -107,7 +123,7 @@ app.post('/api/createuser',async (req, res) => {
       },
       
       CreatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      LastLogin: null,
+      LastLogin: admin.firestore.FieldValue.serverTimestamp(),
 
       CourseStatus: MEMBER_COURSE_STATUS,
       ProjectStatus: MEMBER_PROJECT_STATUS,
@@ -128,7 +144,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 
   if(req.query.error){
     console.log(req.query.error)
-    return res.status(400).send('Discord 授權失敗').redirect(`${process.env.CLIENT_URL}`);
+    return res.status(400).send('Discord 授權失敗').redirect(`${CLIENT_URL}`);
   }
 
   const code = req.query.code;
@@ -139,11 +155,11 @@ app.get('/auth/discord/callback', async (req, res) => {
 
   const exchangeCodeForToken = async (code) => {
     const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID,
-      client_secret: process.env.DISCORD_SECRET,
+      client_id: DISCORD_CLIENT_ID,
+      client_secret: DISCORD_SECRET,
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: process.env.DISCORD_REDIRECT_URI,
+      redirect_uri: DISCORD_REDIRECT_URI,
     }));
   
     return tokenResponse.data.access_token;
@@ -177,7 +193,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 
     await linkDiscordAccount(state, discordUserInfo); // add discord info to db
     setTimeout(() => {
-      res.redirect(`${process.env.CLIENT_URL}`);
+      res.redirect(`${CLIENT_URL}`);
     }, 3000);
 
   } catch (error) {
@@ -188,8 +204,4 @@ app.get('/auth/discord/callback', async (req, res) => {
 
 
 
-
-// 啟動伺服器
-app.listen(port, () => {
-  console.log(`伺服器正在 http://localhost:${port} 上運行`);
-});
+exports.api = functions.https.onRequest(app);

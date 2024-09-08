@@ -33,7 +33,7 @@
             const course = document.getElementById('course').value;
             code = document.getElementById('code').value;
             localStorage.setItem('code', code);
-            fetch(`/checkin/settings?course=${course}&code=${code}`)
+            fetch(`/api/checkin/settings?course=${course}&code=${code}`)
                 .then(response => response.text())
                 .then(data => {
                     const settingsResult = document.getElementById('settingsResult');
@@ -54,7 +54,7 @@
             const id = document.getElementById('id').value;
             const password = localStorage.getItem('code');
             console.log(password);
-            fetch(`/checkin?id=${id}&code=${password}`)
+            fetch(`/api/checkin?id=${id}&code=${password}`)
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('checkinResult').innerText = data;
